@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Join the Waitlist</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem; }
+    .signup-card { background: #fff; border-radius: 14px; padding: 2rem; max-width: 420px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .logo-placeholder { height: 64px; border: 2px dashed #bae6fd; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #7dd3fc; font-size: 13px; margin-bottom: 1.25rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; color: #0c4a6e; text-align: center; }
+    .subtitle { text-align: center; color: #0369a1; margin-top: 4px; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .success-screen { text-align: center; padding: 2rem; }
+    .success-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+    .success-title { font-size: 1.4rem; font-weight: 700; color: #0369a1; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const app = document.getElementById("app");
+
+    function renderForm() {
+      app.innerHTML = `
+        <div class="signup-card">
+          <div class="logo-placeholder">Your Logo Here</div>
+          <h1>Join the Waitlist</h1>
+          <p class="subtitle">We'll notify you when it's your turn</p>
+
+          <form id="signup-form">
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="label">First Name</label>
+                <input class="input" name="firstName" placeholder="Jane" required />
+              </div>
+              <div class="form-group">
+                <label class="label">Last Initial</label>
+                <input class="input" name="lastInitial" placeholder="D" maxlength="1" required style="text-transform:uppercase" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="label">Party Size</label>
+              <select class="input" name="partySize" required>
+                ${Array.from({length:20},(_,i)=>`<option value="${i+1}">${i+1} ${i===0?"person":"people"}</option>`).join("")}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="label">Contact Method</label>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="contactMethod" value="sms" checked /> Text (SMS)</label>
+                <label class="radio-label"><input type="radio" name="contactMethod" value="email" /> Email</label>
+              </div>
+            </div>
+
+            <div class="form-group" id="contact-field">
+              <label class="label" id="contact-label">Phone Number</label>
+              <input class="input" name="contactValue" id="contact-input" type="tel" placeholder="+1 (555) 000-0000" required />
+            </div>
+
+            <div id="form-error" style="color:#dc2626;font-size:.8125rem;margin-bottom:.75rem;display:none"></div>
+
+            <button type="submit" class="btn btn-primary btn-full btn-lg" id="submit-btn">Join Waitlist</button>
+
+            <p style="text-align:center;margin-top:1rem;font-size:.8125rem;color:#64748b">
+              <a href="/queue" style="color:#0284c7;text-decoration:underline">View the current queue →</a>
+            </p>
+          </form>
+        </div>
+      `;
+
+      const form = document.getElementById("signup-form");
+      const radios = form.querySelectorAll('[name="contactMethod"]');
+      const contactLabel = document.getElementById("contact-label");
+      const contactInput = document.getElementById("contact-input");
+
+      radios.forEach(r => r.addEventListener("change", () => {
+        const isSms = form.querySelector('[name="contactMethod"]:checked').value === "sms";
+        contactLabel.textContent = isSms ? "Phone Number" : "Email Address";
+        contactInput.type = isSms ? "tel" : "email";
+        contactInput.placeholder = isSms ? "+1 (555) 000-0000" : "jane@example.com";
+        contactInput.value = "";
+      }));
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const errEl = document.getElementById("form-error");
+        const submitBtn = document.getElementById("submit-btn");
+        const fd = new FormData(form);
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Adding you…";
+        errEl.style.display = "none";
+
+        try {
+          await API.post("/api/parties", {
+            firstName: fd.get("firstName"),
+            lastInitial: fd.get("lastInitial").toUpperCase(),
+            partySize: Number(fd.get("partySize")),
+            contactMethod: fd.get("contactMethod"),
+            contactValue: fd.get("contactValue"),
+          });
+          renderSuccess();
+        } catch (err) {
+          errEl.textContent = err.error || "Something went wrong. Please try again.";
+          errEl.style.display = "block";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Join Waitlist";
+        }
+      });
+    }
+
+    function renderSuccess() {
+      app.innerHTML = `
+        <div class="signup-card">
+          <div class="success-screen">
+            <div class="success-icon">🎉</div>
+            <div class="success-title">You're on the list!</div>
+            <p style="color:#475569;margin-bottom:1.5rem">We'll contact you when it's your turn.</p>
+            <a href="/queue" class="btn btn-primary">View Queue →</a>
+          </div>
+        </div>
+      `;
+      setTimeout(() => window.location.href = "/queue", 3000);
+    }
+
+    renderForm();
+  </script>
+</body>
+</html>

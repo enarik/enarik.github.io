@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Booth Manager</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .main { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1rem; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Waitlist rows */
+    .party-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.9rem; border-radius: 9px; border: 1px solid #e2e8f0; background: #fff; margin-bottom: 0.4rem; transition: border-color .15s, background .15s; }
+    .party-row.dragging { opacity: .35; }
+    .party-row.drag-over { border-color: #0284c7; background: #f0f9ff; }
+    .drag-handle { color: #d1d5db; cursor: grab; user-select: none; font-size: 1rem; flex-shrink: 0; }
+    .drag-handle:active { cursor: grabbing; }
+    .party-rank { width: 1.4rem; height: 1.4rem; border-radius: 50%; background: #e0f2fe; color: #0369a1; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .party-info { flex: 1; min-width: 0; }
+    .party-name { font-weight: 600; color: #0f172a; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .party-contact { font-size: 0.75rem; color: #94a3b8; margin-top: 1px; }
+    .party-actions { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+    /* Tables */
+    .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .booth-table-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; }
+    .table-name-input { font-weight: 600; font-size: 0.875rem; color: #0f172a; border: none; outline: none; background: transparent; width: calc(100% - 60px); padding: 2px 4px; border-radius: 4px; }
+    .table-name-input:hover:not(:disabled) { background: #f8fafc; }
+    .table-name-input:focus { background: #f0f9ff; outline: 1px solid #bae6fd; }
+    .table-name-input:disabled { cursor: default; }
+    .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+    .seats-left { display: flex; flex-direction: column; gap: 0.3rem; }
+    .seats-right { display: flex; flex-direction: column; gap: 0.3rem; }
+    .table-layout { display: grid; grid-template-columns: 1fr 52px 1fr; gap: 0.4rem; align-items: center; }
+    .table-body { background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; height: 88px; display: flex; align-items: center; justify-content: center; }
+    .table-body span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; font-weight: 600; color: #92400e; overflow: hidden; max-height: 80px; text-overflow: ellipsis; white-space: nowrap; }
+    .seat { border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.3rem 0.4rem; min-height: 40px; display: flex; flex-direction: column; justify-content: center; font-size: 0.7rem; cursor: pointer; transition: background .12s, border-color .12s; }
+    .seat.empty { background: #f8fafc; color: #94a3b8; text-align: center; }
+    .seat.empty:hover { background: #f0f9ff; border-color: #7dd3fc; color: #0284c7; }
+    .seat.occupied { background: #f0fdf4; border-color: #86efac; }
+    .seat.occupied:hover { background: #dcfce7; }
+    .seat-person { font-weight: 600; color: #166534; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .seat-party-name { color: #4ade80; font-size: 0.65rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:0.75rem">
+      <div class="header-logo">Logo</div>
+      <span class="header-title">Booth Manager</span>
+      <span class="role-badge" id="role-badge"></span>
+    </div>
+    <div class="header-actions">
+      <a href="/queue" target="_blank" class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25)">Public Queue ↗</a>
+      <a href="/stats" id="stats-link" class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);display:none">Stats</a>
+      <button onclick="logout()" class="btn btn-ghost btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25)">Sign Out</button>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="waitlist" id="tab-waitlist">Waitlist</button>
+    <button class="tab" data-tab="inbooth" id="tab-inbooth">In Booth</button>
+    <button class="tab" data-tab="tables" id="tab-tables">Tables</button>
+  </div>
+
+  <div class="main">
+    <!-- WAITLIST TAB -->
+    <div class="tab-content active" id="content-waitlist">
+      <div class="section-header">
+        <span class="section-label" id="waitlist-count">Loading…</span>
+        <span class="text-sm text-muted">Drag to reorder</span>
+      </div>
+      <div id="waitlist-rows"></div>
+    </div>
+
+    <!-- IN BOOTH TAB -->
+    <div class="tab-content" id="content-inbooth">
+      <div class="section-header">
+        <span class="section-label" id="inbooth-count">Loading…</span>
+      </div>
+      <div id="inbooth-rows"></div>
+    </div>
+
+    <!-- TABLES TAB -->
+    <div class="tab-content" id="content-tables">
+      <div class="section-header">
+        <span class="section-label" id="tables-count">Tables</span>
+        <div id="add-table-controls" style="display:none;gap:0.5rem" class="flex items-center">
+          <input class="input input-sm" id="new-table-name" placeholder="Table name (optional)" style="width:180px" />
+          <button class="btn btn-primary btn-sm" onclick="addTable()">+ Add Table</button>
+        </div>
+      </div>
+      <div class="tables-grid" id="tables-grid"></div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let currentRole = null;
+    let allParties = [];
+    let allTables = [];
+    let dragSrcId = null;
+    let refreshInterval = null;
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    async function init() {
+      currentRole = await requireAuth(["greeter", "admin"]);
+      if (!currentRole) return;
+
+      document.getElementById("role-badge").textContent = currentRole;
+      if (currentRole === "admin") {
+        document.getElementById("stats-link").style.display = "";
+        document.getElementById("add-table-controls").style.display = "flex";
+      }
+
+      await refresh();
+      refreshInterval = setInterval(refresh, 6000);
+    }
+
+    async function refresh() {
+      try {
+        allParties = await API.get("/api/parties");
+        renderWaitlist();
+        renderInBooth();
+        if (document.getElementById("content-tables").classList.contains("active")) {
+          allTables = await API.get("/api/tables");
+          renderTables();
+        }
+      } catch {}
+    }
+
+    async function logout() {
+      await API.post("/api/auth/logout", {});
+      window.location.href = "/login";
+    }
+
+    // ── Tabs ──────────────────────────────────────────────────────────────────
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", async () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById("content-" + tab.dataset.tab).classList.add("active");
+        if (tab.dataset.tab === "tables") {
+          allTables = await API.get("/api/tables");
+          renderTables();
+        }
+      });
+    });
+
+    // ── Waitlist ──────────────────────────────────────────────────────────────
+
+    function renderWaitlist() {
+      const list = allParties.filter(p => p.status === "waiting" || p.status === "notified");
+      document.getElementById("waitlist-count").textContent = `${list.length} ${list.length === 1 ? "party" : "parties"} waiting`;
+      const container = document.getElementById("waitlist-rows");
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="empty-state">No one in the queue right now.</div>`;
+        document.getElementById("tab-waitlist").textContent = "Waitlist (0)";
+        return;
+      }
+      document.getElementById("tab-waitlist").textContent = `Waitlist (${list.length})`;
+
+      container.innerHTML = list.map(p => `
+        <div class="party-row" draggable="true" data-id="${p.id}" id="row-${p.id}">
+          <span class="drag-handle">⋮⋮</span>
+          <div class="party-rank">${p.position}</div>
+          <div class="party-info">
+            <div class="party-name">${esc(p.firstName)} ${esc(p.lastInitial)}. <span style="font-weight:400;color:#64748b;font-size:.8rem">· Party of ${p.partySize}</span></div>
+            <div class="party-contact">${p.contactMethod === "sms" ? "📱" : "✉️"} ${esc(p.contactValue)}</div>
+          </div>
+          <div class="party-actions">
+            <span style="font-size:.75rem;color:#64748b">${formatWait(p.estimatedWait)}</span>
+            <span class="${statusBadgeClass(p.status)}">${statusLabel(p.status)}</span>
+            <button class="btn btn-blue btn-sm" onclick="notify('${p.id}')" ${p.notifyCount >= 2 ? "disabled title='Max notifications sent'" : `title="${2 - p.notifyCount} notification(s) remaining"`}>
+              ${p.notifyCount >= 2 ? "Notified ✓" : `Notify${p.notifyCount === 1 ? " (1 left)" : ""}`}
+            </button>
+            <button class="btn btn-green btn-sm" onclick="checkIn('${p.id}')">Check In →</button>
+            <button class="btn btn-ghost btn-sm" onclick="openEditModal('${p.id}')" title="Edit">✏️</button>
+            <button class="btn btn-orange btn-sm" onclick="markNoShow('${p.id}')">No-show</button>
+            ${currentRole === "admin" ? `<button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="deleteParty('${p.id}')" title="Delete">🗑</button>` : ""}
+          </div>
+        </div>
+      `).join("");
+
+      // Drag-and-drop
+      container.querySelectorAll(".party-row").forEach(row => {
+        row.addEventListener("dragstart", () => { dragSrcId = row.dataset.id; row.classList.add("dragging"); });
+        row.addEventListener("dragend", () => { row.classList.remove("dragging"); document.querySelectorAll(".drag-over").forEach(r => r.classList.remove("drag-over")); });
+        row.addEventListener("dragover", e => { e.preventDefault(); row.classList.add("drag-over"); });
+        row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+        row.addEventListener("drop", async () => {
+          row.classList.remove("drag-over");
+          if (!dragSrcId || dragSrcId === row.dataset.id) return;
+          const waitingList = allParties.filter(p => p.status === "waiting" || p.status === "notified");
+          const fromIdx = waitingList.findIndex(p => p.id === dragSrcId);
+          const toIdx = waitingList.findIndex(p => p.id === row.dataset.id);
+          const reordered = [...waitingList];
+          const [moved] = reordered.splice(fromIdx, 1);
+          reordered.splice(toIdx, 0, moved);
+          await API.post("/api/parties/reorder", { orderedIds: reordered.map(p => p.id) });
+          dragSrcId = null;
+          refresh();
+        });
+      });
+    }
+
+    // ── In Booth ──────────────────────────────────────────────────────────────
+
+    function renderInBooth() {
+      const list = allParties.filter(p => p.status === "in-booth");
+      document.getElementById("inbooth-count").textContent = `${list.length} ${list.length === 1 ? "party" : "parties"} in booth`;
+      document.getElementById("tab-inbooth").textContent = `In Booth (${list.length})`;
+      const container = document.getElementById("inbooth-rows");
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="empty-state">No parties currently in the booth.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(p => `
+        <div class="party-row">
+          <div class="party-info">
+            <div class="party-name">${esc(p.firstName)} ${esc(p.lastInitial)}. <span style="font-weight:400;color:#64748b;font-size:.8rem">· Party of ${p.partySize}</span></div>
+            ${p.entryTime ? `<div class="party-contact">Entered: ${formatTime(p.entryTime)}</div>` : ""}
+          </div>
+          <div class="party-actions">
+            <button class="btn btn-green btn-sm" onclick="checkOut('${p.id}')">✓ Check Out</button>
+            <button class="btn btn-ghost btn-sm" onclick="openEditModal('${p.id}')" title="Edit">✏️</button>
+            ${currentRole === "admin" ? `<button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="deleteParty('${p.id}')" title="Delete">🗑</button>` : ""}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    // ── Tables ────────────────────────────────────────────────────────────────
+
+    function renderTables() {
+      document.getElementById("tables-count").textContent = `Tables (${allTables.length})`;
+      const grid = document.getElementById("tables-grid");
+
+      if (allTables.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">No tables yet.${currentRole === "admin" ? " Add one above." : ""}</div>`;
+        return;
+      }
+
+      grid.innerHTML = allTables.map(t => {
+        const left = t.seats.filter(s => s.side === "left").sort((a, b) => a.seatNumber - b.seatNumber);
+        const right = t.seats.filter(s => s.side === "right").sort((a, b) => a.seatNumber - b.seatNumber);
+        return `
+          <div class="booth-table-card">
+            <div class="table-header">
+              <input class="table-name-input" value="${esc(t.name)}" data-id="${t.id}"
+                ${currentRole !== "admin" ? "disabled" : ""}
+                onblur="renameTable('${t.id}', this.value)"
+                onkeydown="if(event.key==='Enter')this.blur()" />
+              ${currentRole === "admin" ? `<button class="btn btn-ghost btn-sm" style="color:#dc2626;font-size:.7rem" onclick="removeTable('${t.id}')">Remove</button>` : ""}
+            </div>
+            <div class="table-layout">
+              <div class="seats-left">
+                ${left.map(s => seatHTML(s, t.id)).join("")}
+              </div>
+              <div class="table-body"><span>${esc(t.name)}</span></div>
+              <div class="seats-right">
+                ${right.map(s => seatHTML(s, t.id)).join("")}
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function seatHTML(seat, tableId) {
+      const a = seat.assignment;
+      if (a) {
+        return `<div class="seat occupied" onclick="clearSeat('${seat.id}')" title="Click to clear">
+          <div class="seat-person">${esc(a.personName)}</div>
+          <div class="seat-party-name">${esc(a.firstName)} ${esc(a.lastInitial)}.</div>
+        </div>`;
+      }
+      return `<div class="seat empty" onclick="openAssignModal('${seat.id}')" title="Click to assign">Empty</div>`;
+    }
+
+    async function addTable() {
+      const name = document.getElementById("new-table-name").value.trim();
+      await API.post("/api/tables", { name: name || undefined });
+      document.getElementById("new-table-name").value = "";
+      allTables = await API.get("/api/tables");
+      renderTables();
+      showToast("Table added", "success");
+    }
+
+    async function removeTable(id) {
+      if (!confirm("Remove this table?")) return;
+      await API.delete(`/api/tables/${id}`);
+      allTables = await API.get("/api/tables");
+      renderTables();
+    }
+
+    async function renameTable(id, name) {
+      if (!name.trim()) return;
+      await API.patch(`/api/tables/${id}`, { name: name.trim() });
+      allTables = await API.get("/api/tables");
+      renderTables();
+    }
+
+    async function clearSeat(seatId) {
+      await API.post("/api/seats", { seatId, partyId: null, personName: "" });
+      allTables = await API.get("/api/tables");
+      renderTables();
+    }
+
+    function openAssignModal(seatId) {
+      const inBooth = allParties.filter(p => p.status === "in-booth");
+      if (inBooth.length === 0) {
+        showToast("No parties currently in the booth", "error");
+        return;
+      }
+      const overlay = showModal(`
+        <div class="modal-title">Assign Seat</div>
+        <div class="form-group">
+          <label class="label">Party (currently in booth)</label>
+          <select class="input" id="assign-party">
+            <option value="">— Select a party —</option>
+            ${inBooth.map(p => `<option value="${p.id}">${esc(p.firstName)} ${esc(p.lastInitial)}. (party of ${p.partySize})</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="label">Person's Name</label>
+          <input class="input" id="assign-name" placeholder="Individual name" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" id="assign-btn" disabled onclick="doAssign('${seatId}', this.closest('.modal-overlay'))">Assign</button>
+        </div>
+      `);
+
+      overlay.querySelector("#assign-party").addEventListener("input", updateAssignBtn);
+      overlay.querySelector("#assign-name").addEventListener("input", updateAssignBtn);
+      function updateAssignBtn() {
+        const hasParty = overlay.querySelector("#assign-party").value;
+        const hasName = overlay.querySelector("#assign-name").value.trim();
+        overlay.querySelector("#assign-btn").disabled = !hasParty || !hasName;
+      }
+    }
+
+    async function doAssign(seatId, overlay) {
+      const partyId = overlay.querySelector("#assign-party").value;
+      const personName = overlay.querySelector("#assign-name").value.trim();
+      await API.post("/api/seats", { seatId, partyId, personName });
+      overlay.remove();
+      allTables = await API.get("/api/tables");
+      renderTables();
+    }
+
+    // ── Party actions ─────────────────────────────────────────────────────────
+
+    async function notify(id) {
+      try {
+        await API.post("/api/notify", { partyId: id });
+        showToast("Notification sent!", "success");
+        refresh();
+      } catch (err) {
+        showToast(err.error || "Failed to send notification", "error");
+      }
+    }
+
+    async function checkIn(id) {
+      await API.patch(`/api/parties/${id}`, { status: "in-booth" });
+      refresh();
+    }
+
+    async function checkOut(id) {
+      await API.patch(`/api/parties/${id}`, { status: "completed" });
+      refresh();
+      showToast("Party checked out", "success");
+    }
+
+    async function markNoShow(id) {
+      await API.patch(`/api/parties/${id}`, { status: "no-show" });
+      refresh();
+    }
+
+    async function deleteParty(id) {
+      if (!confirm("Delete this entry? This cannot be undone.")) return;
+      await API.delete(`/api/parties/${id}`);
+      refresh();
+    }
+
+    // ── Edit modal ────────────────────────────────────────────────────────────
+
+    function openEditModal(id) {
+      const p = allParties.find(x => x.id === id);
+      if (!p) return;
+
+      const toLocal = iso => iso ? new Date(iso).toISOString().slice(0, 16) : "";
+
+      const overlay = showModal(`
+        <div class="modal-title">Edit Party</div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="label">First Name</label>
+            <input class="input" id="e-firstName" value="${esc(p.firstName)}" />
+          </div>
+          <div class="form-group">
+            <label class="label">Last Initial</label>
+            <input class="input" id="e-lastInitial" value="${esc(p.lastInitial)}" maxlength="1" style="text-transform:uppercase" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="label">Party Size</label>
+            <input class="input" id="e-partySize" type="number" min="1" value="${p.partySize}" />
+          </div>
+          <div class="form-group">
+            <label class="label">Est. Wait (minutes)</label>
+            <input class="input" id="e-wait" type="number" min="0" placeholder="e.g. 15" value="${p.estimatedWait ?? ""}" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label">Status</label>
+          <select class="input" id="e-status">
+            ${["waiting","notified","in-booth","completed","no-show"].map(s =>
+              `<option value="${s}" ${p.status === s ? "selected" : ""}>${statusLabel(s)}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="label">Contact Method</label>
+            <select class="input" id="e-contactMethod">
+              <option value="sms" ${p.contactMethod === "sms" ? "selected" : ""}>SMS</option>
+              <option value="email" ${p.contactMethod === "email" ? "selected" : ""}>Email</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="label">Contact Value</label>
+            <input class="input" id="e-contactValue" value="${esc(p.contactValue)}" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="label">Entry Time</label>
+            <input class="input" id="e-entryTime" type="datetime-local" value="${toLocal(p.entryTime)}" />
+          </div>
+          <div class="form-group">
+            <label class="label">Exit Time</label>
+            <input class="input" id="e-exitTime" type="datetime-local" value="${toLocal(p.exitTime)}" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveEdit('${p.id}', this.closest('.modal-overlay'))">Save Changes</button>
+        </div>
+      `);
+    }
+
+    async function saveEdit(id, overlay) {
+      const get = sel => overlay.querySelector(sel).value;
+      const toISO = val => val ? new Date(val).toISOString() : null;
+      await API.patch(`/api/parties/${id}`, {
+        firstName: get("#e-firstName"),
+        lastInitial: get("#e-lastInitial").toUpperCase(),
+        partySize: Number(get("#e-partySize")),
+        estimatedWait: get("#e-wait") ? Number(get("#e-wait")) : null,
+        status: get("#e-status"),
+        contactMethod: get("#e-contactMethod"),
+        contactValue: get("#e-contactValue"),
+        entryTime: toISO(get("#e-entryTime")),
+        exitTime: toISO(get("#e-exitTime")),
+      });
+      overlay.remove();
+      refresh();
+      showToast("Party updated", "success");
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    init();
+  </script>
+</body>
+</html>

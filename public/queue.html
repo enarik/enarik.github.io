@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Booth Waitlist</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { background: #0c4a6e; color: #fff; min-height: 100vh; padding: 1.5rem; }
+    .queue-header { text-align: center; margin-bottom: 2rem; }
+    .queue-logo { height: 56px; min-width: 200px; border: 2px dashed rgba(255,255,255,.25); border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; color: rgba(255,255,255,.35); font-size: 13px; margin-bottom: 1rem; padding: 0 1rem; }
+    .queue-title { font-size: 2.25rem; font-weight: 700; }
+    .queue-updated { font-size: 0.8rem; color: #7dd3fc; margin-top: 6px; }
+    .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .section-title.notified { color: #93c5fd; }
+    .section-title.in-booth { color: #86efac; }
+    .section-title.waiting { color: #bae6fd; }
+    .queue-section { margin-bottom: 2rem; }
+    .q-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 1.1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.06); margin-bottom: 0.4rem; }
+    .q-row.notified-row { background: rgba(59,130,246,.18); border-color: rgba(147,197,253,.4); }
+    .q-rank { width: 1.75rem; font-size: 1.25rem; font-weight: 700; color: #38bdf8; flex-shrink: 0; text-align: center; }
+    .q-name { font-weight: 600; font-size: 1.05rem; }
+    .q-party { font-size: 0.8125rem; color: #94a3b8; margin-top: 2px; }
+    .q-right { margin-left: auto; text-align: right; flex-shrink: 0; }
+    .q-wait { font-size: 0.8rem; color: #7dd3fc; margin-bottom: 3px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; }
+    .join-btn { display: inline-block; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 8px; padding: 0.55rem 1.25rem; font-size: 0.875rem; text-align: center; cursor: pointer; transition: background .15s; text-decoration: none; }
+    .join-btn:hover { background: rgba(255,255,255,.2); }
+    .empty-q { text-align: center; padding: 3rem 1rem; color: #7dd3fc; font-size: 0.95rem; }
+    .pulse-dot { animation: pulseDot 2s ease-in-out infinite; }
+    @keyframes pulseDot { 0%,100%{opacity:1}50%{opacity:.3} }
+  </style>
+</head>
+<body>
+  <div class="container" style="max-width:800px">
+    <div class="queue-header">
+      <div><span class="queue-logo">Your Logo Here</span></div>
+      <div class="queue-title">Booth Waitlist</div>
+      <div class="queue-updated" id="updated-time">Loading…</div>
+    </div>
+    <div id="queue-content"></div>
+    <div style="text-align:center;margin-top:1.5rem">
+      <a href="/" class="join-btn">+ Join the Waitlist</a>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    async function render() {
+      try {
+        const parties = await API.get("/api/parties");
+        const active = parties.filter(p => !["completed","no-show"].includes(p.status));
+        const notified = active.filter(p => p.status === "notified");
+        const inBooth  = active.filter(p => p.status === "in-booth");
+        const waiting  = active.filter(p => p.status === "waiting");
+
+        let html = "";
+
+        if (notified.length) {
+          html += `<div class="queue-section">
+            <div class="section-title notified">
+              <span class="dot pulse-dot" style="background:#60a5fa"></span>
+              Please Come to the Booth Now
+            </div>
+            ${notified.map(p => qRow(p, null, true)).join("")}
+          </div>`;
+        }
+
+        if (inBooth.length) {
+          html += `<div class="queue-section">
+            <div class="section-title in-booth">
+              <span class="dot" style="background:#4ade80"></span>
+              Currently in the Booth
+            </div>
+            ${inBooth.map(p => qRow(p, null, false)).join("")}
+          </div>`;
+        }
+
+        html += `<div class="queue-section">
+          <div class="section-title waiting">Queue (${waiting.length})</div>
+          ${waiting.length === 0
+            ? `<div class="empty-q">No one waiting right now — <a href="/" style="color:#38bdf8;text-decoration:underline">be the first!</a></div>`
+            : waiting.map((p, i) => qRow(p, i + 1, false)).join("")
+          }
+        </div>`;
+
+        document.getElementById("queue-content").innerHTML = html;
+        document.getElementById("updated-time").textContent =
+          "Last updated " + new Date().toLocaleTimeString() + " · Auto-refreshes every 5s";
+      } catch {
+        document.getElementById("updated-time").textContent = "Error loading queue";
+      }
+    }
+
+    function qRow(p, rank, isNotified) {
+      return `<div class="q-row ${isNotified ? "notified-row" : ""}">
+        ${rank != null ? `<div class="q-rank">${rank}</div>` : ""}
+        <div>
+          <div class="q-name">${esc(p.firstName)} ${esc(p.lastInitial)}.</div>
+          <div class="q-party">Party of ${p.partySize}</div>
+        </div>
+        <div class="q-right">
+          ${p.estimatedWait && p.status === "waiting" ? `<div class="q-wait">~${formatWait(p.estimatedWait)} wait</div>` : ""}
+          <span class="${statusBadgeClass(p.status)}">${statusLabel(p.status)}</span>
+        </div>
+      </div>`;
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    render();
+    setInterval(render, 5000);
+  </script>
+</body>
+</html>

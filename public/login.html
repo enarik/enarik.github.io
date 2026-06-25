@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff Login</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { background: #f1f5f9; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+    .login-card { background: #fff; border-radius: 14px; padding: 2rem; max-width: 360px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .logo-placeholder { height: 48px; border: 2px dashed #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-size: 12px; margin-bottom: 1.25rem; }
+    h1 { font-size: 1.4rem; font-weight: 700; text-align: center; color: #0f172a; margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="logo-placeholder">Your Logo Here</div>
+    <h1>Staff Login</h1>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label class="label">Role</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="role" value="greeter" checked /> Greeter</label>
+          <label class="radio-label"><input type="radio" name="role" value="admin" /> Admin</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="label">Password</label>
+        <input class="input" type="password" name="password" id="password" required autofocus />
+      </div>
+
+      <div id="login-error" style="color:#dc2626;font-size:.8125rem;margin-bottom:.75rem;display:none"></div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="submit-btn">Sign In</button>
+    </form>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // If already logged in, redirect
+    API.get("/api/auth/me").then(data => {
+      const params = new URLSearchParams(window.location.search);
+      window.location.href = params.get("from") || "/admin";
+    }).catch(() => {});
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById("login-error");
+      const btn = document.getElementById("submit-btn");
+      const fd = new FormData(e.target);
+
+      btn.disabled = true;
+      btn.textContent = "Signing in…";
+      errEl.style.display = "none";
+
+      try {
+        await API.post("/api/auth/login", {
+          role: fd.get("role"),
+          password: fd.get("password"),
+        });
+        const params = new URLSearchParams(window.location.search);
+        window.location.href = params.get("from") || "/admin";
+      } catch (err) {
+        errEl.textContent = err.error || "Incorrect password. Please try again.";
+        errEl.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "Sign In";
+        document.getElementById("password").value = "";
+        document.getElementById("password").focus();
+      }
+    });
+  </script>
+</body>
+</html>
